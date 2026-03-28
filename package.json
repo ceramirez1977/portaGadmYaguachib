@@ -1,0 +1,30 @@
+{
+  "name": "portalcbdb",
+  "version": "1.0.0",
+  "description": "Developed Ing. Cesar Ramirez.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "ejs": "^3.1.9",
+    "express": "^4.18.2",
+    "js-sha256": "^0.10.1",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.8",
+    "oracledb": "^6.2.0",
+    "pg": "^8.13.1",
+    "pg-hstore": "^2.3.4",
+    "puppeteer": "^21.11.0",
+    "sequelize": "^6.37.7",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
