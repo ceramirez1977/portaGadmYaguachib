@@ -16,6 +16,7 @@ const {enviaCorreoComprobanteIngreso,crearHtmltoPdf,procesaEnvioVoucherEmailPEL}
 const {rutadocHtml} = require('../src/gen/rutasScgp');
 const dbora = require('./db/conexion.oracle12c');
 const poolOracle = require('./db/poolconexion');
+const config = require('./config/config');
 
 const listaBlanca = ['https://26.123.40.168:5173','https://localhost:5173','https://192.168.0.106:5173'];
 const app = express();
@@ -32,8 +33,8 @@ app.set("view engine","ejs");
 //configuraciones
 app.set('port',process.env.PORT || 3100);
 //Cambiar ruta base con el nombre del modulo
-app.set('ruta','/apiCBD');
-app.set('rutapublica','/apiCBD/public');
+app.set('ruta','/apiINSTI');
+app.set('rutapublica','/apiINSTI/public');
 //Middleware
 app.use(morgan('dev'));
 app.use(express.urlencoded({extended:false}));
@@ -161,21 +162,31 @@ app.get("/refund",async (req,res)=>{
 
 poolOracle.inicializaDbPoolOracle();
 
-//servidor en protocolo http
-app.listen(app.get('port'),()=>{
-   console.log(`Servidor Abierto en puerto 3100`);
-});
+//servidor en protocolo http, hay que Habilitarlo al subir a produccion
+//app.listen(app.get('port'),()=>{
+//   console.log(`Servidor Abierto en puerto 3100`);
+//});
 
-
-/*
+//Hay que desabilitarlo al momento de subir a produccion
 const options ={
-   key:fs.readFileSync('C:/datasis/portal/portalCBDb/26.123.40.168-key.pem'),
-   cert:fs.readFileSync('C:/datasis/portal/portalCBDb/26.123.40.168.pem')
+   key:fs.readFileSync('D:/proyectoweb/cobroenlinea/yaguachi/portalGadmYaguachib/26.123.40.168-key.pem'),
+   cert:fs.readFileSync('D:/proyectoweb/cobroenlinea/yaguachi/portalGadmYaguachib/26.123.40.168.pem')
 }
 https.createServer(options,app).listen(app.get('port'),()=>{
    console.log(`Servidor Abierto en puerto 3100`);
 });
-*/
 
-process.on('SIGTERM',poolOracle.cerrarDbPoolOracle);
-process.on('SIGINT',poolOracle.cerrarDbPoolOracle);
+const gracefulShutdown = async () => {
+    console.log('\nRecibida señal de cierre. Limpiando recursos...');
+    try {
+        await poolOracle.cerrarDbPoolOracle(); // Esperamos a que el pool cierre (con sus 10s de gracia)
+        console.log('Cierre de pool exitoso.');
+        process.exit(0); // Ahora sí, cerramos el proceso de Node
+    } catch (err) {
+        console.error('Error durante el cierre forzado:', err);
+        process.exit(1);
+    }
+};
+
+process.on('SIGTERM',gracefulShutdown);
+process.on('SIGINT',gracefulShutdown);

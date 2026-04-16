@@ -343,33 +343,12 @@ BEGIN
  END;
 `;
 
-const plsql_INTMORDESC = `
-DECLARE
- 
- VD_FECHALIQUIDA DATE;
- VR_RECARGOS RECAUDA.PKG_ARE_PG.TIPO_RECARGOS;
- 
-BEGIN
-  :PN_ERROR := 0;
-  VD_FECHALIQUIDA := TO_DATE(:PV_FECHALIQUIDA,'DDMMYYYY');
-  RECAUDA.PKG_ARE_PG.PU_CALCULA_INTMORDESC(:PN_VALORNOMINAL,:PN_IMPUESTOPREDIAL,:PN_ANIO_DEUDA,VD_FECHALIQUIDA,VR_RECARGOS,:PV_MSG_ERROR);
-  --PR_RECARGOS.NOMINAL
-  :PN_INTERES   := VR_RECARGOS.INTERES;
-  :PN_MORA      := VR_RECARGOS.MORA;
-  :PN_COACTIVA  := VR_RECARGOS.COACTIVA;
-  :PN_DESCUENTO := VR_RECARGOS.DESCUENTO;
-  :PN_MULTA     := VR_RECARGOS.MULTA;
-  :PN_ABONO     := VR_RECARGOS.ABONO;
-  :PN_TOTAL     := VR_RECARGOS.TOTAL;
-  
-END;
-`;
 
 const plsql_INSCABLIQWEB_PG = `
 DECLARE
  VB_ERROR BOOLEAN;
 BEGIN
-  
+
   VB_ERROR := FALSE;
   RECAUDA.PKG_ARE_PORCOBRAR_SW.PU_INSCABLIQWEB_PG(:PN_NUMERO,
                                                   :PV_MODULO,
@@ -385,11 +364,16 @@ BEGIN
                                                   :PV_DIRECCION,
                                                   :PV_OBSERVACION,
                                                   :PV_TITULO_CREDITO,
-                                                  :PN_VALOR_TOTAL,
+                                                  :PN_VALOR_EXO,
+                                                  :PN_VALOR_NOMINAL,
+                                                  :PN_IMPUESTO_PREDIAL,
                                                   :PN_INTERES,
                                                   :PN_MORA,
                                                   :PN_COACTIVA,
-                                                  :PN_SECCABLIQ ,
+                                                  :PN_DESCUENTO,
+                                                  :PN_TOTAL,
+                                                  :PN_SECCABLIQ,
+                                                  :PT_DETALLES,
                                                   VB_ERROR,
                                                   :PV_MSG_ERROR
                                                   );
@@ -404,28 +388,6 @@ EXCEPTION
 END;
 `;
 
-const plsql_INSDETLIQWEB_PG = `
-DECLARE
- VB_ERROR BOOLEAN;
-BEGIN
-  
-  VB_ERROR := FALSE;
-  RECAUDA.PKG_ARE_PORCOBRAR_SW.PU_INSDETLIQWEB_PG(:PN_ID_RUBRO,
-                                                  :PN_VALOR,
-							                                    :PN_SECCABLIQ,
-							                                    VB_ERROR,
-							                                    :PV_MSG_ERROR
-                                                  );
-  IF VB_ERROR THEN
-    :PN_ERROR := 1;
-  END IF;
-
-EXCEPTION
-  WHEN OTHERS THEN
-       :PN_ERROR := 1;
-       :PV_MSG_ERROR := 'ERROR plsql_INSDETLIQWEB_PG '||SQLERRM;
-END;
-`;
 
 const plsql_INSCABLIQWEBPGJSON = `BEGIN
                       INSERT INTO ARE_CABLIQWEBPG_JSON(SECUENCIA_CAB, LIQJSONPG, FECHA_INGRESO) VALUES(:PN_SECUENCIA_CAB,:PV_JSON,SYSDATE); 
@@ -482,7 +444,18 @@ const plsql_NUMERO_LIQUIDACION = `
                         WHEN OTHERS THEN
                           :PN_ERROR := 1; 
                           :PV_MSG_ERROR := 'ERROR AL CONSULTAR NUMERO LIQUIDACION '||SQLERRM;
-                      END;`;     
+                      END;`;   
+
+const plsql_CONSULTACOMPROBANTES =  `
+    SELECT A.NUM_COMPROBANTE,TO_CHAR(A.FECHA_COMPROBANTE,'DD-MON-YYYY HH24:MI:SS') FECHA_COMPROBANTE,B.DESCRIPCION,LTRIM(RTRIM(TO_CHAR(A.VALOR_TOTAL,'999999990.99'))) VALOR_TOTAL, A.DIRECCION, A.TRANSACTION_ID, A.AUTHORIZATION_CODE, A.SECABLIQWEB
+    FROM ARE_RECAUDACIONES_PAGOENLINEA A,ARE_DETALLE_SUBTRAN B 
+    WHERE A.ESTADO_PAGO IN ('P','C') AND
+          A.NUMERO_IDENTIFICACION = :PV_CEDULA AND
+          A.CODIGO_TRANSACCION = B.CODIGO_TRANSACCION AND
+          A.CODIGO_SUBTRANSACCION = B.CODIGO_SUBTRANSACCION AND
+          A.CODIGO_DETALLE_SUBTRAN = B.CODIGO_DETALLE_SUBTRAN
+    ORDER BY A.FECHA_COMPROBANTE DESC,A.NUM_COMPROBANTE
+`; 
                   
 
 module.exports = {
@@ -503,11 +476,10 @@ module.exports = {
     plsql_UPDATE_RECAPEL,
     plsql_INSERTASECPROCJSON,
     plsql_INSERTAERROR_PEL,
-    plsql_INTMORDESC,
-    plsql_INSCABLIQWEB_PG,
-    plsql_INSDETLIQWEB_PG,
+    plsql_INSCABLIQWEB_PG,    
     plsql_INSCABLIQWEBPGJSON,
     plsql_CONSULTAR_CABLIQWEBPGJSON,
     plsql_INSERTA_RECAPEL_PG,
-    plsql_NUMERO_LIQUIDACION
+    plsql_NUMERO_LIQUIDACION,
+    plsql_CONSULTACOMPROBANTES
 }

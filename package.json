@@ -1,5 +1,5 @@
 {
-  "name": "portalcbdb",
+  "name": "portalGadmYaguachib",
   "version": "1.0.0",
   "description": "Developed Ing. Cesar Ramirez.",
   "main": "index.js",
@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
     "ejs": "^3.1.9",
     "express": "^4.18.2",
     "js-sha256": "^0.10.1",

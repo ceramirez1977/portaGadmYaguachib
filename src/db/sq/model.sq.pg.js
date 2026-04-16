@@ -1,8 +1,8 @@
 const { DataTypes} = require ('sequelize');
 const {Sequelize} = require('sequelize');
-const {ip_serverweb,getCredencialOra} = require('../../gen/rutasScgp');
+const {ip_serverweb,getCredencialOra,getConnPG} = require('../../gen/rutasScgp');
 const {fechaActualServer} = require('../../gen/dataReferencial');
-const {getConnPG} = require('../../gen/rutasScgp');
+
 
 const credencialOra = getCredencialOra();
 const connPG = getConnPG();
@@ -431,6 +431,28 @@ const ComprobanteDetalle = sequelize.define(
     timestamps: false,
 });
 
+
+// Relación Uno a Muchos
+Comprobante.hasMany(ComprobanteDetalle, { foreignKey: 'id_comprobante', as: 'detalles' });
+ComprobanteDetalle.belongsTo(Comprobante, { foreignKey: 'id_comprobante' });
+
+//create posterior
+// DEFINIR HOOK AQUÍ (Antes del export)
+Comprobante.addHook('afterCreate', async (comprobante, options) => {
+  try
+  {
+    const actualJson = comprobante.toJSON();
+    await comprobante.update({ 
+      json_impreso: JSON.stringify(actualJson) 
+    }, { 
+      transaction: options.transaction, // Importante para que use la misma transacción
+      hooks: false // Evita bucles infinitos de hooks
+    });
+  }
+  catch(error){
+    console.error("Error actualizando JSON en Hook:", error);
+  }
+});
 
 
 /*

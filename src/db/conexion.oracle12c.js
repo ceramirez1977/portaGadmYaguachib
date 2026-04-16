@@ -30,13 +30,12 @@ const {
        plsql_UPDATE_RECAPEL,
        plsql_INSERTASECPROCJSON,
        plsql_INSERTAERROR_PEL,
-       plsql_INTMORDESC,
        plsql_INSCABLIQWEB_PG,
-       plsql_INSDETLIQWEB_PG,
        plsql_INSCABLIQWEBPGJSON,
        plsql_CONSULTAR_CABLIQWEBPGJSON,
        plsql_INSERTA_RECAPEL_PG,
-       plsql_NUMERO_LIQUIDACION
+       plsql_NUMERO_LIQUIDACION,
+       plsql_CONSULTACOMPROBANTES
       } = require('./gestiondb.plsql');
 
 const {
@@ -229,7 +228,8 @@ const funConsultarDeuda = async (parametros,rutaname_funcion,connection) => {
   //Procesar Oracle y Consulta la liquidacion 
   console.log('consulta ORACLE');
    objPara.PN_NUMERO.val = numeroliq;
-   const result = await connection.execute(plsql_CONSULTARDEUDA,objPara,{autoCommit:true});   
+   const result = await connection.execute(plsql_CONSULTARDEUDA,objPara,{autoCommit:true}); 
+   //console.log('result',result)  
   if (!result.outBinds.PV_MSG_ERROR)
   {
     let encontro=false;    
@@ -489,6 +489,50 @@ const funConsultarfacturas = async(parametros,rutaname_funcion,connection) => {
   return resultado;
 }
 
+const funConsultarComprobantes = async(parametros,rutaname_funcion,connection) => {
+  
+  let resultado = null;
+  try
+  {
+    //console.log('parametros',parametros);
+    
+    let objPara = funObjParametros(parametros.data);
+    
+    console.log('objPara',objPara);
+
+    const result = await connection.execute(plsql_CONSULTACOMPROBANTES,objPara,{outFormat: objoracle.OUT_FORMAT_OBJECT});    
+
+    //const data = result.rows; // Cuando lo envio normalmente
+    const data = result.rows.map((row, index) => {
+      return {
+        // Tabulator recomienda tener un ID único. 
+        // Si no tienes uno, podemos usar el índice o el NUM_COMPROBANTE
+        id: index + 1, 
+        comprobante: row.NUM_COMPROBANTE,
+        fechacomprobante: row.FECHA_COMPROBANTE,
+        concepto: row.DESCRIPCION,
+        valor: row.VALOR_TOTAL, // Convertimos el string a número para que Tabulator pueda sumar/ordenar mejor
+        direccion: row.DIRECCION,
+        transaction_id: row.TRANSACTION_ID,
+        authorization_mode: row.AUTHORIZATION_CODE,
+        seccabiqweb: row.SECABLIQWEB
+      };
+    });
+    console.log('resultado',resultado);
+    resultado = getResultado(parametros.token,data,getErrorResultado(false,'',''));              
+    
+  }
+  catch(e)
+  {
+    resultado = getResultado(parametros.token,{},getErrorResultado(true,`Error al consultar comprobantes de Ingreso a Caja para el ruc : ${parametros.data[0].columna.valor}. ${e.toString()}`,''));                  
+  }
+  console.log('resultado1',resultado);
+
+  return resultado; 
+
+}
+
+
 const funConnection = async (parametros,rutaname_funcion,f) => {  
   let resultado ={};
   let connection;
@@ -566,6 +610,12 @@ async function recuperaUsuarioLogin(parametros){
   return resultado;        
 }
 
+async function consultarComprobantes(parametros){
+  //console.log('consultarComprobantes');
+  const resultado = await funConnection(parametros,path.join(__filename,consultarComprobantes.name),funConsultarComprobantes);
+  return resultado;        
+}
+
 async function prueba(objeto){
     
     let objetoResultado=null;
@@ -635,9 +685,9 @@ async function prueba(objeto){
                               PV_MSG_ERROR:{ dir: objoracle.BIND_INOUT, val: null, type: objoracle.STRING,maxSize:1000 }
                             },
                             {autoCommit:true});                                                                       
-         console.log('resultado',result.outBinds);
+         //console.log('resultado',result.outBinds);
          const {PV_MSG_ERROR} = result.outBinds;
-         console.log('PV_MSG_ERROR',PV_MSG_ERROR);
+         //console.log('PV_MSG_ERROR',PV_MSG_ERROR);
          if(PV_MSG_ERROR == null)
          {console.log('Variable nula o undefined');}
          objetoResultado = result.outBinds;     
@@ -875,8 +925,6 @@ async function consultaLiqPG(pn_seccab_liq,pv_session,pv_idtransaccion,pv_codetr
     //PARA LLAMAR LIQUIDACION EN LA DB
      const objjson = await consultarCabLiqWebJson(pn_seccab_liq,connectionDbOra);
    
-    //const conection = await objoracle.getConnection(credencial); 
-    //close(conection);
     const param = {
       PN_SECCABLIQ:{ dir: objoracle.BIND_IN, val: pn_seccab_liq, type: objoracle.NUMBER },
       PV_SESION:{ dir: objoracle.BIND_IN, val: pv_session, type: objoracle.STRING,maxSize:100 },                                                              
@@ -895,28 +943,7 @@ async function consultaLiqPG(pn_seccab_liq,pv_session,pv_idtransaccion,pv_codetr
     };
     const result = await connectionDbOra.execute(plsql_INSERTA_RECAPEL_PG,param,{autoCommit:true}); 
     vv_msg_error = result.outBinds.PV_MSG_ERROR;
-    /* PARA CONSULTAR UN CURSOR DE LA BASE E DATOS
-    //PC_RUBROS:{ dir: objoracle.BIND_INOUT,  type: objoracle.CURSOR}
-    const resultSet = result.outBinds.PC_RUBROS;
-    const dataA=[];
-    //let row;
-    //while ((row = await resultSet.getRow())) {
-    //await resultSet.close();
-    //con el for await of, el cursor se cierra implicitamente
-    for await (const row of resultSet)
-    {
-      const valor_total = redondear(row[2]);
-      const objeto = {
-          codigo_rubro:row[0],
-          desc_rubro:row[1], 
-          valor:valor_total
-          };
-      dataA.push(objeto); 
-      //console.log('row',row);
-    };
-    */
-
-  
+     
     comprobante = {
       id_comprobante:1,
       numero_comprobante_pago:0,
@@ -969,7 +996,7 @@ async function consultaLiqPG(pn_seccab_liq,pv_session,pv_idtransaccion,pv_codetr
       //json_impreso text NOT NULL,
       //id_usuario_reverso int4 NULL,
       //observacion_reverso
-      detalle_rubros:objjson.arrRXC
+      detalle_rubros:objjson.arrRubrosxcatastro
     };   
          
   }
@@ -1036,57 +1063,15 @@ async function updataRecaPEL(pn_secabliqweb,pn_numIdcompro,pv_session,pv_idtrans
 
 }
 
-async function getIntMorDesc(liqCabCata)//,connectionDbOra)
-{
-  let connectionDbOra;
-  try
-  {
-    connectionDbOra = await getConnection();
-    const param = {
-      PV_FECHALIQUIDA:{ dir: objoracle.BIND_INOUT, val: liqCabCata.fechaliquida, type: objoracle.STRING,maxSize:15 },
-      PN_ANIO_DEUDA:{dir: objoracle.BIND_IN, val: liqCabCata.anio, type: objoracle.NUMBER},
-      PN_IMPUESTOPREDIAL:{dir: objoracle.BIND_IN, val: liqCabCata.impuestopredial , type: objoracle.NUMBER},
-      PN_VALORNOMINAL:{dir: objoracle.BIND_IN, val: liqCabCata.valor_nominal, type: objoracle.NUMBER},
-      PN_INTERES:{dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER},
-      PN_MORA:{dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER},
-      PN_COACTIVA:{dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER},
-      PN_DESCUENTO:{dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER},
-      PN_MULTA:{dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER},
-      PN_ABONO:{dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER},
-      PN_TOTAL:{dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER},
-      PN_ERROR:{ dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
-      PV_MSG_ERROR:{ dir: objoracle.BIND_INOUT, val: '', type: objoracle.STRING,maxSize:1000 }
-    };
-    const result = await connectionDbOra.execute(plsql_INTMORDESC,param,{autoCommit:true}); 
-    liqCabCata.valor_descuento = result.outBinds.PN_DESCUENTO;
-    liqCabCata.valor_interes   = result.outBinds.PN_INTERES;
-    liqCabCata.valor_coactiva  = result.outBinds.PN_COACTIVA;
-    liqCabCata.valor_abono     = result.outBinds.PN_ABONO;
-    liqCabCata.valor_mora      = result.outBinds.PN_MORA;
-    liqCabCata.total_recibido  = result.outBinds.PN_TOTAL;
-    
-    //vn_error  = result.outBinds.PN_ERROR;
-  }
-  catch(e)
-  {
-    console.log('getIntMorDesc',e.toString());
-  }
-  finally
-  {
-     await getCloseConnection(connectionDbOra);
-  }    
-
-}
 
 async function insertCabLiqWeb(liqCabCata)
 {
-  console.log('Recibe insertCabLiqWeb ',liqCabCata.numero)
   let connectionDbOra;
   let numeroLiq = 0;
   let param={};  
   try
   {
-    
+    //console.log('insertCabLiqWeb inicio');
     connectionDbOra = await getConnection();
     param = {
       PN_NUMERO: { dir: objoracle.BIND_IN, val: liqCabCata.numero, type: objoracle.NUMBER },
@@ -1103,21 +1088,33 @@ async function insertCabLiqWeb(liqCabCata)
       PV_DIRECCION:  { dir: objoracle.BIND_IN, val: liqCabCata.direccion, type: objoracle.STRING,maxSize:100 },
       PV_OBSERVACION:  { dir: objoracle.BIND_IN, val: liqCabCata.observacion, type: objoracle.STRING,maxSize:1000 },
       PV_TITULO_CREDITO:  { dir: objoracle.BIND_IN, val: liqCabCata.numero_tc, type: objoracle.STRING,maxSize:30 },
-      PN_VALOR_TOTAL:{ dir: objoracle.BIND_IN, val: liqCabCata.total_recibido, type: objoracle.NUMBER }, 
-      PN_INTERES: { dir: objoracle.BIND_IN, val: liqCabCata.valor_interes, type: objoracle.NUMBER },
-      PN_MORA: { dir: objoracle.BIND_IN, val: liqCabCata.valor_mora, type: objoracle.NUMBER },
-      PN_COACTIVA: { dir: objoracle.BIND_IN, val: liqCabCata.valor_coactiva, type: objoracle.NUMBER },
+      PN_VALOR_EXO: { dir: objoracle.BIND_IN, val: liqCabCata.valor_exoneracion, type: objoracle.NUMBER },
+      PN_VALOR_NOMINAL: { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
+      PN_IMPUESTO_PREDIAL: { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
+      PN_INTERES: { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
+      PN_MORA : { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
+      PN_COACTIVA : { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
+      PN_DESCUENTO : { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
+      PN_TOTAL : { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
       PN_SECCABLIQ: { dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
+      PT_DETALLES: { dir: objoracle.BIND_IN, val: liqCabCata.arrRubrosxcatastro, type: "RECAUDA.TAB_RUBRO_LIQ"},
       PN_ERROR:{ dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
       PV_MSG_ERROR:{ dir: objoracle.BIND_INOUT, val: '', type: objoracle.STRING,maxSize:1000 }
     };
-    //console.log('Parametro liqCabCata',param);
-    const result = await connectionDbOra.execute(plsql_INSCABLIQWEB_PG,param,{autoCommit:true}); 
-    numeroLiq = result.outBinds.PN_SECCABLIQ;
-    const vnerror =  result.outBinds.PN_ERROR;
+    const result               = await connectionDbOra.execute(plsql_INSCABLIQWEB_PG,param,{autoCommit:true}); 
+    //console.log('insertCabLiqWeb ejecuto');
+    liqCabCata.seccabliq       = result.outBinds.PN_SECCABLIQ;
+    liqCabCata.valor_nominal   = result.outBinds.PN_VALOR_NOMINAL;
+    liqCabCata.impuestopredial = result.outBinds.PN_IMPUESTO_PREDIAL;
+    liqCabCata.valor_interes   = result.outBinds.PN_INTERES;
+    liqCabCata.valor_mora      = result.outBinds.PN_MORA;
+    liqCabCata.valor_coactiva  = result.outBinds.PN_COACTIVA;
+    liqCabCata.valor_descuento = result.outBinds.PN_DESCUENTO;
+    liqCabCata.total_recibido  = result.outBinds.PN_TOTAL;
+    const vnerror      =  result.outBinds.PN_ERROR;
     const vv_msg_error =  result.outBinds.PV_MSG_ERROR;    
+    //console.log('insertCabLiqWeb datos');
     
-    console.log('insertCabLiqWeb: Envia  ',numeroLiq);
   }
   catch(e)
   {
@@ -1131,35 +1128,9 @@ async function insertCabLiqWeb(liqCabCata)
   }
 
   return numeroLiq;
-
 }
 
 
-async function insertDetLiqWeb(objxRubro)
-{
-  let connectionDbOra;
-  try
-  {
-    connectionDbOra = await getConnection();
-    const param = {
-      PN_ID_RUBRO:{dir: objoracle.BIND_IN, val: objxRubro.idrubro, type: objoracle.NUMBER},
-      PN_VALOR:{dir: objoracle.BIND_IN, val: objxRubro.valor , type: objoracle.NUMBER},
-      PN_SECCABLIQ:{dir: objoracle.BIND_IN, val: objxRubro.seccabliq, type: objoracle.NUMBER},      
-      PN_ERROR:{ dir: objoracle.BIND_INOUT, val: 0, type: objoracle.NUMBER },
-      PV_MSG_ERROR:{ dir: objoracle.BIND_INOUT, val: '', type: objoracle.STRING,maxSize:1000 }
-    };
-    const result = await connectionDbOra.execute(plsql_INSDETLIQWEB_PG,param,{autoCommit:true}); 
-    console.log('insertDetLiqWeb: pv_msg_error ',result.outBinds.PV_MSG_ERROR);
-  }
-  catch(e)
-  {
-   console.log('error insertDetLiqWeb',e.toString());
-  }
-  finally
-  {
-    await getCloseConnection(connectionDbOra);
-  }
-}
 
 async function insertCabLiqWebPGJson(liqCabCata)
 {
@@ -1174,7 +1145,7 @@ async function insertCabLiqWebPGJson(liqCabCata)
       PV_MSG_ERROR:{ dir: objoracle.BIND_INOUT, val: '', type: objoracle.STRING,maxSize:1000 }
     };
     const result = await connectionDbOra.execute(plsql_INSCABLIQWEBPGJSON,param,{autoCommit:true}); 
-     console.log('insertCabLiqWebPGJson: pv_msg_error ',result.outBinds.PV_MSG_ERROR);
+     //console.log('insertCabLiqWebPGJson: pv_msg_error ',result.outBinds.PV_MSG_ERROR);
     
   }
   catch(e)
@@ -1298,9 +1269,8 @@ exports.insertaRubXCataPg = insertaRubXCataPg;
 exports.consultaLiqPG = consultaLiqPG;
 exports.updataRecaPEL = updataRecaPEL;
 exports.insertaJsonPEL = insertaJsonPEL;
-exports.getIntMorDesc = getIntMorDesc;
 exports.insertCabLiqWeb = insertCabLiqWeb;
-exports.insertDetLiqWeb = insertDetLiqWeb;
 exports.insertCabLiqWebPGJson = insertCabLiqWebPGJson;
 exports.consultarCabLiqWebJson = consultarCabLiqWebJson;
+exports.consultarComprobantes = consultarComprobantes;
 

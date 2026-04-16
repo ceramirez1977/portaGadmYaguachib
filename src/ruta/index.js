@@ -31,6 +31,10 @@ router.post('/enviovaucherpagoenlinea',controlador.enviovaucherpagoenlinea);
 
 router.post('/insertaerrorpagoenlinea',controlador.insertaerrorpagoenlinea);
 
+router.post('/consultacomprobantes',controlador.consultacomprobantes);
+
+router.post('/consultarComprobantePDF',controlador.consultarComprobantePDF);
+
 
 
 router.get('/prueba',controlador.prueba);

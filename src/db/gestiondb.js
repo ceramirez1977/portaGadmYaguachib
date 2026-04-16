@@ -23,7 +23,7 @@ const getConnection = async () => {
     try
     {
         connection = await objoracle.getConnection();                
-        console.log('conexion abierta');
+        //console.log('conexion abierta');
         return connection;
     }
     catch(e){

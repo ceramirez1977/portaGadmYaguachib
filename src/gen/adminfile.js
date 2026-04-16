@@ -3,7 +3,7 @@ var path = require('path');
 const puppeteer = require('puppeteer');
 const nodemailer = require('nodemailer');
 const {host_gmail,port_gmail,credencialesEmailEmisor,msgCorreoPagoEnLinea,msgCorreoEnviaComprobanteIngreso,msgCorreoUsuarioRegistrado,msgCorreoRecuperarUsuario,msgCorreoLogError} = require('./dataemail');
-const {rwrun60,rutadocHtml,rutadocCompIng,creapdfdocelec,correogestionbackend} = require('./rutasScgp');
+const {rwrun60,rutadocHtml,rutadocCompIng,creapdfdocelec,correogestionbackend,NOMBREINSTITUCION,DIRECCIONINSTITUCION,TELEFONOINSTITUCION} = require('./rutasScgp');
 const {agregarLogError,agregarLogSucces} = require('./gestionarchivo');
 const {esperarSeg} = require('./dataReferencial');
 
@@ -20,11 +20,11 @@ const contenidoHTML = `<html>  &//
   <img src="logo_institucion.jpg"/>&//
   <div id="principal">&//
    <div id="logo">	   	 &//  
-     <p>GAD MUNICIPAL DEL CANTON YAGUACHI</p>&//
+     <p>${NOMBREINSTITUCION}</p>&//
    </div>&//
    <div id="cabecera">&//
-     <p>Av. Lorenzo de Garaicoa, Yaguachi<br>&//
-     (04) 202-0442 &//
+     <p>${DIRECCIONINSTITUCION}<br>&//
+        ${TELEFONOINSTITUCION}&//
      </p>&//
      <h2>PAGO EN LINEA</h2>&//
    </div>&//
@@ -92,6 +92,7 @@ const generarPDF = async (archivo) =>
 
 const enviaCorreo = async (opciones) => {
     const credenciales = credencialesEmailEmisor();
+    //console.log('credenciales',credenciales);
     let transporte = nodemailer.createTransport({
         host: host_gmail(),
         port: port_gmail(),
@@ -102,7 +103,8 @@ const enviaCorreo = async (opciones) => {
         },
         secureConnection: 'false',
         tls: {
-            ciphers: 'SSLv3'
+            //ciphers: 'SSLv3'
+            rejectUnauthorized: false
         }
     });   
    
@@ -144,7 +146,7 @@ const enviaCorreo = async (opciones) => {
 const enviaCorreoRegistroUsuario = async (dataCorreo) => {
 
   let to = dataCorreo.correo;
-  let subject = 'CREDENCIALES PARA ACCESO AL PORTAL WEB DEL GAD MUNICIPAL DEL CANTON YAGUACHI';
+  let subject = `CREDENCIALES PARA ACCESO AL PORTAL WEB DEL ${NOMBREINSTITUCION}`;
   let text = msgCorreoUsuarioRegistrado(dataCorreo);
   let attachments = [];
 
@@ -160,7 +162,7 @@ const enviaCorreoRegistroUsuario = async (dataCorreo) => {
 
 const enviaCorreoRecuperarUsuario = async (dataCorreo) =>{
   let to = dataCorreo.correo;
-  let subject = 'RECUPERAR CREDENCIALES PARA ACCESO AL PORTAL WEB DEL GAD MUNICIPAL DEL CANTON YAGUACHI';
+  let subject = `RECUPERAR CREDENCIALES PARA ACCESO AL PORTAL WEB DEL ${NOMBREINSTITUCION}`;
   let text = msgCorreoRecuperarUsuario(dataCorreo);
   let attachments = [];
 
@@ -178,7 +180,7 @@ const enviaCorreoRecuperarUsuario = async (dataCorreo) =>{
 const enviaCorreoPagoEnLinea = async (tran,id_json,IdSession,archivo) => {
   
   let to = tran.usuario.correo;
-  let subject = 'PAGO EN LINEA EN EL GAD MUNICIPAL DEL CANTON YAGUACHI';
+  let subject = `PAGO EN LINEA EN EL ${NOMBREINSTITUCION}`;
   let text = msgCorreoPagoEnLinea(tran,id_json,IdSession);
   let attachments = [{path:archivo}];
 
@@ -196,18 +198,18 @@ const enviaCorreoPagoEnLinea = async (tran,id_json,IdSession,archivo) => {
 const enviaCorreoComprobanteIngreso = async (usuario) => {
      
   let to = usuario.correo;
-  let subject = 'ENVIO COMPROBANTES DE INGRESO A CAJA POR GAD MUNICIPAL DEL CANTON YAGUACHI';
+  let subject = `ENVIO COMPROBANTES DE INGRESO A CAJA POR ${NOMBREINSTITUCION}`;
   let text = msgCorreoEnviaComprobanteIngreso();
   const adjunto=[];
   //usuario.comprobantes.forEach((comprobante)=>{    });
-  console.log('envio correo',JSON.stringify(usuario));
+  //console.log('envio correo',JSON.stringify(usuario));
   for(const comprobante of usuario.comprobantes)
   {
     //const filename = `${comprobante.num_comprobante}.pdf`;
     //const path = `${rutadocCompIng}\\CC${comprobante.num_comprobante}.pdf`   
     const filename = `${comprobante.reca.seccabliq}.pdf`;
     const path = `${rutadocCompIng}\\CC${comprobante.reca.seccabliq}.pdf`;   
-    console.log('arc adjuntos',filename,path)
+    //console.log('arc adjuntos',filename,path)
     adjunto.push({filename,path});
   };
   let attachments = adjunto;
@@ -222,7 +224,7 @@ const enviaCorreoComprobanteIngreso = async (usuario) => {
   };
 
   const msgcorreo = await enviaCorreo(opciones);
-  console.log(msgcorreo);
+  //console.log(msgcorreo);
 
 }
 
@@ -238,7 +240,7 @@ const ejecutaChildProcess = async  (cadena) => {
     }
     catch(e)
     {
-      console.log('ejecutaChildProcess error ',e.toString());  
+      //console.log('ejecutaChildProcess error ',e.toString());  
       agregarLogError(`gen/adminfile/ejecutaChildProcess`,`Bloque catch(e):  cadena: ${cadena} error: ${e.toString()}`);                   
     }
 
@@ -281,6 +283,7 @@ const crearComprobanteRecauda =  async (nombrearchivo,numerocomprobante) =>{
     }*/  
     try
     {
+      //console.log('crearComprobanteRecauda',nombrearchivo,numerocomprobante);
       const cadena =  rwrun60(nombrearchivo,numerocomprobante);
       await ejecutaChildProcess(cadena);      
     }
@@ -296,9 +299,10 @@ const crearComprobantes= async (usuario) =>
   //usuario.comprobantes.forEach( (comprobante) => {});
   for(const comprobante of usuario.comprobantes)  
   {
-     console.log('crearComprobantes archivo',comprobante);         
+     //console.log('crearComprobantes comprobante',comprobante);         
      
      const archivo = `${rutadocCompIng}\\CC${comprobante.reca.seccabliq}.pdf`
+     //console.log('crearComprobantes archivo',archivo);         
      await crearComprobanteRecauda(archivo,comprobante.reca.seccabliq);        
       //const archivo = `${rutadocCompIng}\\CC${comprobante.num_comprobante}.pdf` 
       //await crearComprobanteRecauda(archivo,comprobante.num_comprobante); 

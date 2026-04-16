@@ -2,7 +2,7 @@ const dbora = require('../db/conexion.oracle12c');
 const { createHash } = require('crypto');
 const path = require('node:path');
 const fs = require('fs');
-const {rutaPdfDocElec,rutaXmlDocElec,getClavePaymentez_ECSERVER,getEnlacePaymentez,getModoPaymentez} = require('../gen/rutasScgp');
+const {rutaPdfDocElec,rutaXmlDocElec,rutadocCompIng,getClavePaymentez_ECSERVER,getEnlacePaymentez,getModoPaymentez,NOMBREINSTITUCION} = require('../gen/rutasScgp');
 const {procesaEnvioVoucherEmailPEL,
        crearComprobantes,
        enviaCorreoComprobanteIngreso,
@@ -112,22 +112,25 @@ const funContra_deudaxcedula = async (parametros) => {
                     let datafiltro=[];
                     let dataObj={};
                     let cuenta_ant,titulo_ant;
-                    resultado.data.forEach((dato) => {
+                    resultado.data.forEach((dato,index) => {
+                         const idFilaUnico = `filaDeuda-${dato.cuenta}-${dato.anio_deuda}-${dato.numero}-${dato.liquidacion}-${index+1}`;
                          if(primero)
                          {
                               cuenta_ant = dato.cuenta;
                               titulo_ant = dato.titulo;               
                               primero = false;
-                              dataObj = {cuenta:dato.cuenta,
-                                        titulo:dato.titulo,
-                                        codigo_subconcepto:dato.codigo_subconcepto,                          
-                                        direccion:dato.direccion,
-                                        validar_orden_cobro:dato.validar_orden_cobro,
-                                        valor:[]};
+                              dataObj = {id:`grupoDeuda-${dato.cuenta}-${dato.titulo}-${index+1}`,
+                                         cuenta:dato.cuenta,
+                                         titulo:dato.titulo,
+                                         codigo_subconcepto:dato.codigo_subconcepto,                          
+                                         direccion:dato.direccion,
+                                         validar_orden_cobro:dato.validar_orden_cobro,
+                                         valor:[]};
                          }
                          if( titulo_ant == dato.titulo) // cuenta_ant == dato.cuenta &&
                          {
                               const valor = {
+                                   id:idFilaUnico,
                                    numero:dato.numero,
                                    cuenta:dato.cuenta,
                                    anio:dato.anio,
@@ -149,13 +152,15 @@ const funContra_deudaxcedula = async (parametros) => {
                               cuenta_ant = dato.cuenta;
                               titulo_ant = dato.titulo;
                               dataObj = {};
-                              dataObj = {cuenta:dato.cuenta,
-                                        titulo:dato.titulo,
-                                        codigo_subconcepto:dato.codigo_subconcepto,                          
-                                        direccion:dato.direccion,
-                                        validar_orden_cobro:dato.validar_orden_cobro,
-                                        valor:[]};
+                              dataObj = {id:`grupoDeuda-${dato.cuenta}-${dato.titulo}-${index+1}`,
+                                         cuenta:dato.cuenta,
+                                         titulo:dato.titulo,
+                                         codigo_subconcepto:dato.codigo_subconcepto,                          
+                                         direccion:dato.direccion,
+                                         validar_orden_cobro:dato.validar_orden_cobro,
+                                         valor:[]};
                               dataObj.valor.push({
+                                   id:idFilaUnico,
                                    numero:dato.numero,
                                    cuenta:dato.cuenta,
                                    anio:dato.anio,
@@ -383,6 +388,11 @@ const funContra_consultarfacturas = async (parametros) => {
      return resultados;
 }
 
+const funContra_consultacomprobantes = async(parametros) => {
+     const resultados = await dbora.consultarComprobantes(parametros);
+     return resultados;
+}
+
 const funDb = async (body,rutaname_funcion,f) =>{          
      try
      {
@@ -555,6 +565,63 @@ const enviovaucherpagoenlinea = async(req,res) => {
      res.status(200).json(resultado);     
 }
 
+const consultacomprobantes = async(req,res) => {
+     const resultado = await funDb(req.body,path.join(__filename,consultacomprobantes.name),funContra_consultacomprobantes);
+     res.status(200).json(resultado);    
+
+}
+
+const consultarComprobantePDF = async(req,res) => {
+     const { body } = req; 
+     try{
+       
+          const objeto = {
+               archivo: atob(body.data.archivo),
+               num_comprobante:atob(body.data.num_comprobante),
+               seccabiqweb:atob(body.data.seccabiqweb)
+          };          
+        
+          const filePath = path.join(rutadocCompIng,objeto.archivo);           
+          
+          //console.log('filePath',filePath);          
+          
+          if(!fs.existsSync(filePath))           
+          {
+               const compro = [{num_comprobante:objeto.num_comprobante,reca:{seccabliq:objeto.seccabiqweb}}];
+               await crearComprobantes({comprobantes:compro});
+          }        
+          const base64String = fs.readFileSync(filePath,{encoding:'base64'});            
+          let datos ={
+               token:body.token,
+               data:{},
+               error:{
+               hay:true,
+               msg:`No existe documento Electronico. Por favor, si el error continua comuniquese con el ${NOMBREINSTITUCION}.`,
+               solucion:''
+               }
+          };
+          datos.data = btoa(JSON.stringify({archivo:base64String}));
+          datos.error.hay=false;
+          datos.error.msg='';
+          res.json(JSON.stringify(datos));         
+  
+     }
+     catch(e)
+     {
+          const objetoError = {
+               token:body.token,
+               data:btoa(JSON.stringify({})),
+               error:{
+                 hay:true,
+                 msg:`Error consultararchivo ${e}`,
+                 solucion:''
+                }
+              }; 
+          res.status(200).json(JSON.stringify(objetoError));  
+     }
+}
+
+
 
 const insertaerrorpagoenlinea = async(req,res) => {
    const objeto = {
@@ -600,5 +667,7 @@ module.exports = {
     recuperaUsuarioLogin,    
     prueba,
     enviovaucherpagoenlinea,
-    insertaerrorpagoenlinea    
+    insertaerrorpagoenlinea,
+    consultacomprobantes,
+    consultarComprobantePDF    
 }
